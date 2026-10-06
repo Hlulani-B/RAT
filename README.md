@@ -6,6 +6,21 @@ file, directory, author and commit set.
 
 ---
 
+## Quick start
+
+For the impatient — clone, install, run. Nothing else to set up:
+
+```bash
+git clone https://github.com/Hlulani-B/RAT.git
+cd RAT
+pip install -r requirements.txt      # the single dependency is Flask
+python run.py                        # open http://127.0.0.1:8000
+```
+
+The full walk-through (virtualenv, Windows, troubleshooting) is below.
+
+---
+
 ## Getting started
 
 Everything is pure Python + SQLite: no npm, no build step, no services to
@@ -55,6 +70,10 @@ pip install -r requirements.txt
 python run.py                 # -> http://127.0.0.1:8000
 ```
 
+(On Windows, use `py run.py` if `python` is not recognised. The `data/`
+directory — the SQLite database plus every clone and upload — is created
+automatically on first run.)
+
 That single command runs the whole application — there is nothing else to
 start. The frontend is plain HTML/CSS/JS with **no build step and no
 Node.js**, and it is served by the same Flask process:
@@ -77,8 +96,10 @@ same process), `--data ./somewhere` (where clones, uploads and `rat.db` live).
 Open **http://127.0.0.1:8000**, click **+ Add repository** and either:
 
 * **Clone from URL** — paste a public clone URL such as
-  `https://github.com/DaveGamble/cJSON.git` and press *Clone & analyse*; the
-  sidebar reports live progress (cJSON: 955 commits, ready in seconds), or
+  `https://github.com/DaveGamble/cJSON.git` and press *Clone & analyse*.
+  Public repositories need **no credentials**: SSH links
+  (`git@github.com:…`) are converted to HTTPS automatically. The sidebar
+  reports live progress (cJSON: 955 commits, ready in seconds), or
 * **Upload zip** — drop a zip of a repository that contains its `.git`
   folder.
 
