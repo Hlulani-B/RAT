@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAT — Repo Analysis Tool</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1520'/%3E%3Cpath d='M9 22V10h7.2a3.6 3.6 0 0 1 1.4 6.9L21 22h-3l-2.9-4.6H12V22z' fill='%233ddc84'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app">
+
+  <aside id="sidebar">
+    <div class="side-head">
+      <div class="logo">RAT</div>
+      <div class="side-title">
+        <strong>Repo Analysis Tool</strong>
+        <span>git history intelligence</span>
+      </div>
+    </div>
+
+    <button id="btn-add-repo" class="btn primary block">+ Add repository</button>
+
+    <div class="side-label">Repositories</div>
+    <div id="repo-list" class="repo-list">
+      <div class="empty-hint">No repositories yet.<br>Add one by clone URL or zip upload.</div>
+    </div>
+
+    <div class="side-foot">
+      <span id="engine-version"></span>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <div id="repo-head">
+        <h1 id="repo-title">No repository selected</h1>
+        <div id="repo-sub" class="muted"></div>
+      </div>
+
+      <div id="filters" class="filters hidden">
+        <div class="seg" id="time-presets" role="group" aria-label="Time range">
+          <button data-preset="all" class="active">All</button>
+          <button data-preset="1y">1y</button>
+          <button data-preset="6m">6m</button>
+          <button data-preset="3m">3m</button>
+          <button data-preset="1m">1m</button>
+        </div>
+        <label class="date-field">
+          <span>from</span>
+          <input type="date" id="from-date">
+        </label>
+        <label class="date-field">
+          <span>to</span>
+          <input type="date" id="to-date">
+        </label>
+        <select id="author-filter" title="Filter by author">
+          <option value="">All authors</option>
+        </select>
+        <button id="btn-commits-filter" class="btn chip" title="Filter by a manual selection of commits">
+          Commits: all
+        </button>
+        <button id="btn-ref" class="btn chip" title="Reference commit h_r for H̄ (default HEAD)">
+          ref: HEAD
+        </button>
+        <button id="btn-clear-filters" class="btn ghost" title="Reset every filter">Clear</button>
+      </div>
+    </header>
+
+    <nav id="tabs" class="tabs hidden" role="tablist">
+      <button data-tab="overview" role="tab">Overview</button>
+      <button data-tab="browser" role="tab">Browser</button>
+      <button data-tab="authors" role="tab">Authors</button>
+      <button data-tab="commits" role="tab">Commits</button>
+      <div class="tab-spacer"></div>
+      <div id="filter-summary" class="filter-summary"></div>
+    </nav>
+
+    <section id="view" class="view">
+      <div class="welcome">
+        <h2>Understand how a repository evolved</h2>
+        <p class="muted">
+          Upload a zip of a git repository, or paste a clone URL, then explore
+          file, directory, repository, commit-set and author metrics.
+        </p>
+        <div class="welcome-grid">
+          <div class="wcard"><h3>Metric engine</h3>
+            <p>Added / removed lines, growth, churn, modifications, frequency,
+               churn rate and author ownership — computed straight from git
+               history with rename detection.</p></div>
+          <div class="wcard"><h3>Filters</h3>
+            <p>Any metric can be restricted to a period of time, a single
+               author, or a manually picked set of commits.</p></div>
+          <div class="wcard"><h3>Author merging</h3>
+            <p>.mailmap aware, plus manual merging of identities that belong
+               to the same person.</p></div>
+        </div>
+        <div class="welcome-cta">
+          <button class="btn primary" onclick="document.getElementById('btn-add-repo').click()">
+            + Add a repository to begin
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="modal-root"></div>
+<div id="toasts"></div>
+<div id="tooltip" class="tooltip hidden"></div>
+
+<script src="/static/charts.js"></script>
+<script src="/static/views.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

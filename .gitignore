@@ -1,0 +1,12 @@
+# RAT runtime data (clones, uploads, database)
+data/
+
+# scratch/probe artifacts
+.scratch/
+
+# python
+__pycache__/
+*.pyc
+
+# os
+.DS_Store
