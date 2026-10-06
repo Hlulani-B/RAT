@@ -20,6 +20,27 @@ from .analyze import Analyzer
 
 URL_RE = re.compile(r"^(https?://|git://|ssh://|[\w.+-]+@[\w.-]+:).+", re.S)
 
+# Public repositories on the big forges must clone without any credential:
+# grading and fresh machines have no SSH key and no personal access token.
+# SSH (git@host:path / ssh://…) and the long-dead git:// URLs for these hosts
+# are rewritten to their anonymous HTTPS equivalents. Other hosts keep their
+# URL — they may genuinely need SSH authentication.
+_ANON_HTTPS_HOSTS = ("github.com", "gitlab.com", "bitbucket.org")
+_SSH_URL_RE = re.compile(
+    r"^ssh://(?:[^@/]+@)?(?P<host>[^/:]+)(?::\d+)?/(?P<path>.+)$", re.I)
+_SCP_URL_RE = re.compile(r"^[^@/\s]+@(?P<host>[^:/\s]+):(?P<path>[^:]+)$")
+_GIT_URL_RE = re.compile(r"^git://(?P<host>[^/:]+)/(?P<path>.+)$", re.I)
+
+
+def normalize_url(url: str) -> str:
+    """Rewrite SSH / git:// URLs of public-code hosts to anonymous HTTPS."""
+    for rx in (_SSH_URL_RE, _SCP_URL_RE, _GIT_URL_RE):
+        m = rx.match(url)
+        if m and m.group("host").lower() in _ANON_HTTPS_HOSTS:
+            return ("https://" + m.group("host").lower() + "/"
+                    + m.group("path").lstrip("/"))
+    return url
+
 
 class IngestError(RuntimeError):
     """Raised for user-facing ingestion failures."""
@@ -99,9 +120,18 @@ def ingest_zip(store, repo_id: int, zip_path: str, set_progress: Callable) -> No
 # --------------------------------------------------------------------- url
 
 def _clone(url: str, dest: str, set_progress: Callable) -> None:
+    url = normalize_url(url)
     cmd = ["git", "clone", "--progress", "--", url, dest]
+    env = dict(os.environ)
+    # A server job has no terminal to answer credential prompts: without
+    # these, git would block forever (or scrape the server's tty) when a
+    # repo needs auth. Fail fast with a clear "could not read Username"
+    # error instead; public repos never prompt at all.
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_SSH_COMMAND"] = "ssh -oBatchMode=yes -oConnectTimeout=10"
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.PIPE)
+                            stderr=subprocess.PIPE,
+                            stdin=subprocess.DEVNULL, env=env)
     assert proc.stderr is not None
     pct = re.compile(rb"(\d+)%")
     last = 0.0

@@ -165,7 +165,7 @@
         <button data-m="zip">Upload zip</button>
       </div>
       <div id="m-url">
-        <label class="field"><span>Repository URL (https / git / ssh)</span>
+        <label class="field"><span>Repository URL (https / git / ssh — public repos need no credentials)</span>
           <input type="url" id="f-url" placeholder="https://github.com/redis/redis.git"></label>
         <label class="field"><span>Display name (optional)</span>
           <input type="text" id="f-name" placeholder="derived from the URL"></label>

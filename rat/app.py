@@ -172,7 +172,7 @@ def create_app(store) -> Flask:
     @app.post("/api/repos")
     def add_repo():
         payload = request.get_json(force=True, silent=True) or {}
-        url = (payload.get("url") or "").strip()
+        url = ingest.normalize_url((payload.get("url") or "").strip())
         if not url or not URL_RE.match(url):
             abort(400, description="invalid repository URL")
         name = (payload.get("name") or "").strip()

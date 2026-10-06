@@ -110,6 +110,10 @@ python tests/validate.py
 
 * **Clone URL** — paste an `https://`, `git://`, `ssh://` or `user@host:path`
   URL; the repo is fully cloned (complete history) with live progress.
+  GitHub/GitLab/Bitbucket SSH and `git://` URLs are rewritten to HTTPS, so
+  **public repositories clone with no SSH key and no token**; credential
+  prompts are disabled, so a URL that needs auth fails fast with a clear
+  error instead of hanging.
 * **Upload zip** — drop a zip of a working tree that contains its `.git`
   directory. Nested archives are fine (the repo root is found automatically);
   extraction rejects absolute paths, `..` and symlinks.
