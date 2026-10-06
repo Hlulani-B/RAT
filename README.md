@@ -72,16 +72,6 @@ Useful options: `--port 9000`, `--host 0.0.0.0` (reachable from other
 machines — the dashboard follows automatically because it is served by the
 same process), `--data ./somewhere` (where clones, uploads and `rat.db` live).
 
-**Optional — Docker.** The steps above are the supported path; if you prefer
-a container, a `Dockerfile` is included:
-
-```bash
-docker build -t rat .
-docker run --rm -p 8000:8000 -v rat-data:/app/data rat   # -> http://127.0.0.1:8000
-```
-
-The volume keeps clones and `rat.db` across container restarts.
-
 ### 5. Analyse your first repository
 
 Open **http://127.0.0.1:8000**, click **+ Add repository** and either:
