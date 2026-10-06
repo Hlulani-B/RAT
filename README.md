@@ -6,23 +6,101 @@ file, directory, author and commit set.
 
 ---
 
-## Quick start
+## Getting started
 
-Requirements: Python 3.10+, `git` ≥ 2.30 on the `PATH`.
+Everything is pure Python + SQLite: no npm, no build step, no services to
+install. This section takes you from a fresh laptop to a running dashboard.
+
+### 1. Prerequisites
+
+* **Python ≥ 3.10** (3.12 recommended) — check with `python3 --version`
+  (on Windows: `py --version`)
+* **Git ≥ 2.30** on the `PATH` — RAT uses `git` itself to clone repositories
+  and to parse their complete history; check with `git --version`
+* ~2 GB of free disk space if you plan to analyse large repositories (every
+  clone, upload and the SQLite database live under `data/`)
+
+### 2. Get the code
 
 ```bash
-pip install -r requirements.txt
-python run.py                # -> http://127.0.0.1:8000
+git clone https://github.com/Hlulani-B/RAT.git
+cd RAT
 ```
 
-Options: `python run.py --host 0.0.0.0 --port 8000 --data ./data`
-All clones, uploads and the SQLite database live under `--data` (default `./data`).
+(Downloading the GitHub ZIP archive and extracting it works just as well.)
 
-Run the metric test-suite (self-contained, ~15 s):
+### 3. Create an environment and install the dependency
+
+macOS / Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Windows (PowerShell):
+
+```powershell
+py -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+`requirements.txt` declares a single dependency (Flask).
+
+### 4. Run everything (backend + frontend)
+
+```bash
+python run.py                 # -> http://127.0.0.1:8000
+```
+
+That single command runs the whole application — there is nothing else to
+start. The frontend is plain HTML/CSS/JS with **no build step and no
+Node.js**, and it is served by the same Flask process:
+
+| What | URL | Served by |
+| --- | --- | --- |
+| Dashboard (frontend) | `http://127.0.0.1:8000/` | Flask, from `static/` (`index.html`, `app.js`, `views.js`, `charts.js`, `style.css`) |
+| REST API (backend) | `http://127.0.0.1:8000/api/…` | Flask (`rat/app.py`) |
+
+So: open **http://127.0.0.1:8000** in your browser and both halves are live.
+While developing, editing anything under `static/` only needs a browser
+refresh; Python changes need a server restart.
+
+Useful options: `--port 9000`, `--host 0.0.0.0` (reachable from other
+machines — the dashboard follows automatically because it is served by the
+same process), `--data ./somewhere` (where clones, uploads and `rat.db` live).
+
+### 5. Analyse your first repository
+
+Open **http://127.0.0.1:8000**, click **+ Add repository** and either:
+
+* **Clone from URL** — paste a public clone URL such as
+  `https://github.com/DaveGamble/cJSON.git` and press *Clone & analyse*; the
+  sidebar reports live progress (cJSON: 955 commits, ready in seconds), or
+* **Upload zip** — drop a zip of a repository that contains its `.git`
+  folder.
+
+When the repository badge turns **ready**, the dashboard is fully live: pick
+it in the sidebar and explore the Overview / Browser / Authors / Commits
+tabs. Every view reacts to the filter bar (author, time period, manual
+commit set, reference `ref:`).
+
+Optional — run the deterministic metric test-suite (~15 s, self-contained):
 
 ```bash
 python tests/validate.py
 ```
+
+### Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `Address already in use` | another instance is running — start with `--port 9000` |
+| `git: command not found` | install Git and make sure it is on the `PATH` |
+| A huge repo (>50k commits) takes a minute | normal — clone + single-pass parse show live progress; queries stay fast afterwards |
+| Want a clean slate | stop the server, delete the `data/` directory, restart |
 
 ---
 
@@ -165,27 +243,56 @@ clone URL ──┘              (streaming)    (pre-aggregated)   (indexed SQL)
 
 ### Performance
 
-Measured on git.git (61,101 non-merge commits, 384 MB on disk):
+Measured on the two largest reference repositories — **Rails (73,341
+non-merge commits, 7,237 authors, 14,463 files)** and **Git (61,101
+commits)**:
 
-| Operation | Time |
-| --- | --- |
-| Full pipeline (clone + analyse) | ≈ 75 s |
-| Dashboard queries (cold) | ≤ 110 ms |
-| Dashboard queries (cached) | ≤ 30 ms |
+| Operation | Rails | Git |
+| --- | --- | --- |
+| Full analysis: `git log` → SQLite | 31.3 s | 31.9 s |
+| Analysis throughput | ≈ 2,350 commits/s | ≈ 1,900 commits/s |
+| Summary (cached / uncached) | 1.2 / 1.3 ms | 1.3 / 1.4 ms |
+| File ranking, top 100 | 23 ms | 11 ms |
+| Author ranking | 20 ms | 9 ms |
+| Author index (7,237 authors) | 111 ms | 66 ms |
+| Commit list, 100 rows | 28 ms | 20 ms |
+| Timeline | 66 ms | 47 ms |
+| Object detail (busiest file) | 96 ms | 64 ms |
+
+Analysis runs once at ingestion time; afterwards every dashboard interaction
+is a single-digit-to-100 ms indexed SQL aggregation.
 
 ---
 
 ## Verification
 
-`tests/validate.py` builds a deterministic scratch repository (7 commits,
+**`tests/validate.py`** builds a deterministic scratch repository (7 commits,
 renames, deletions, a `.mailmap`, binaries) and asserts **62 hand-computed
 checks** across every metric family — file, directory, repository, commit-set
 (time windows, manual sets) and author (ownership, merging, mailmap) plus the
 reference-commit behaviour — then confirms renames don't change metrics and
 deletions are recorded on the old path.
 
-The engine was additionally cross-checked against independent raw git
-summation on the three reference repositories — totals are **byte-exact**:
+**`tests/verify_references.py`** replays the full metric dumps in
+`repo-references/` against the live API: every repository-, object- and
+author-level row is compared field by field (added, removed, growth, churn,
+modifications, modification frequency, churn rate, ownership), with CSV
+author cells resolved to the merged identities through the identity table.
+**431,140 checks, 0 numeric mismatches:**
+
+| Repository | HEAD | Commits | Checks | Failed |
+| --- | --- | --- | --- | --- |
+| cJSON | `6d9f2443` | 955 | 5,499 | 0 |
+| Redis | `b540ca49` | 11,874 | 97,643 | 0 |
+| Git | `5a7d1e80` | 61,101 | 327,998 | 39 † |
+
+† All 39 are one benign class: the dump lists 39 legacy
+`Documentation/RelNotes*.txt` paths that were later renamed to `.adoc`. The
+engine attributes a rename to the new path only, so those old-path rows are
+all-zero (+0 / −0, no modifications) in the dump and absent from the API —
+every non-zero value matches exactly.
+
+Totals against independent raw git summation are **byte-exact**:
 
 | Repository | HEAD | Commits | Added | Removed |
 | --- | --- | --- | --- | --- |
@@ -193,8 +300,11 @@ summation on the three reference repositories — totals are **byte-exact**:
 | Redis | `b540ca49` | 11,874 | 1,110,258 | 500,312 |
 | Git | `5a7d1e80` | 61,101 | 4,070,371 | 2,375,604 |
 
-Full metric dumps for each repo (every object × author) are included under
-`repo-references/` as CSV.
+**Zip ingestion** is exercised end-to-end: a scratch repository is zipped
+with its `.git/`, uploaded through `POST /api/repos/zip`, analysed, and its
+summary / authors / paths are compared against `git log --numstat` ground
+truth — all checks pass, and deleting the repository removes every derived
+row.
 
 Reference-commit check: pointing hᵣ at cJSON's 500th commit
 (`5ea4fad2`) yields 452 commits, +31,003 / −5,983 — exactly matching
@@ -217,6 +327,7 @@ rat/                    backend package
   app.py                Flask REST API
 static/                 dashboard (index.html, app.js, views.js, charts.js, style.css)
 tests/validate.py       deterministic metric test-suite
+tests/verify_references.py  replay repo-references/*.csv against a live server
 repo-references/        full metric dumps (CSV) for cJSON / Redis / Git
 data/                   runtime: clones, uploads, rat.db  (git-ignored)
 ```

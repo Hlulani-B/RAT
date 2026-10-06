@@ -88,6 +88,16 @@ def create_app(store) -> Flask:
     uploads_dir = os.path.join(store.data_dir, "uploads")
     os.makedirs(uploads_dir, exist_ok=True)
 
+    # Ingestion jobs live in this process's memory only: after a restart no
+    # worker can be progressing a queued/cloning/analyzing repository, so
+    # surface those as errors instead of a permanently "busy" sidebar.
+    for r in store.list_repos():
+        if r["status"] in ("queued", "cloning", "analyzing"):
+            store.update_repo(
+                r["id"], status="error",
+                error="ingestion was interrupted by a server restart"
+                      " — remove the repository and add it again")
+
     # ----------------------------------------------------------- utilities
 
     def get_ready(repo_id: int) -> dict:

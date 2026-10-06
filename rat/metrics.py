@@ -449,34 +449,46 @@ class Metrics:
     # ------------------------------------------------------- author mangmt
 
     def identities(self, repo_id: int) -> List[dict]:
+        # Single-pass aggregate. The previous per-identity correlated
+        # subqueries filtered commits by identity_id alone, which cannot use
+        # the composite index commits(repo_id, identity_id) — they degraded
+        # to two full commit scans per identity (minutes on 2.5k-identity
+        # repositories) and blocked the dashboard render for large repos.
         rows = self.store.conn().execute(
             "SELECT i.id AS id, i.name AS name, i.email AS email,"
             " im.author_id AS author_id,"
-            " (SELECT COUNT(*) FROM commits c WHERE c.identity_id = i.id)"
-            "   AS commits,"
-            " (SELECT COALESCE(SUM(c.added + c.removed), 0) FROM commits c"
-            "   WHERE c.identity_id = i.id) AS churn"
+            " COALESCE(agg.cnt, 0) AS commits,"
+            " COALESCE(agg.churn, 0) AS churn"
             " FROM identities i"
             " JOIN identity_map im ON im.identity_id = i.id"
+            " LEFT JOIN (SELECT identity_id, COUNT(*) AS cnt,"
+            "                   SUM(added + removed) AS churn"
+            "            FROM commits WHERE repo_id = ?"
+            "            GROUP BY identity_id) agg"
+            "   ON agg.identity_id = i.id"
             " WHERE i.repo_id = ? ORDER BY commits DESC, i.name",
-            (repo_id,)).fetchall()
+            (repo_id, repo_id)).fetchall()
         return [dict(r) for r in rows]
 
     def author_list(self, repo_id: int) -> List[dict]:
+        # Single-pass aggregates (see identities() above): per-author
+        # correlated subqueries over commits become one grouped scan each.
         rows = self.store.conn().execute(
             "SELECT a.id AS id, a.name AS name,"
-            " (SELECT COUNT(*) FROM identities i WHERE i.repo_id = a.repo_id"
-            "   AND i.id IN (SELECT identity_id FROM identity_map"
-            "                WHERE author_id = a.id)) AS identities,"
-            " (SELECT COUNT(*) FROM commits c WHERE c.repo_id = a.repo_id"
-            "   AND c.identity_id IN (SELECT identity_id FROM identity_map"
-            "                         WHERE author_id = a.id)) AS commits,"
-            " (SELECT COALESCE(SUM(c.added + c.removed), 0) FROM commits c"
-            "   WHERE c.repo_id = a.repo_id AND c.identity_id IN"
-            "   (SELECT identity_id FROM identity_map WHERE author_id = a.id))"
-            "   AS churn"
-            " FROM authors a WHERE a.repo_id = ? ORDER BY commits DESC",
-            (repo_id,)).fetchall()
+            " COALESCE(imc.n, 0) AS identities,"
+            " COALESCE(agg.commits, 0) AS commits,"
+            " COALESCE(agg.churn, 0) AS churn"
+            " FROM authors a"
+            " LEFT JOIN (SELECT author_id, COUNT(*) AS n FROM identity_map"
+            "            GROUP BY author_id) imc ON imc.author_id = a.id"
+            " LEFT JOIN (SELECT im.author_id AS aid, COUNT(*) AS commits,"
+            "                   SUM(c.added + c.removed) AS churn"
+            "            FROM commits c"
+            "            JOIN identity_map im ON im.identity_id = c.identity_id"
+            "            WHERE c.repo_id = ?"
+            "            GROUP BY im.author_id) agg ON agg.aid = a.id"
+            " WHERE a.repo_id = ? ORDER BY commits DESC",
+            (repo_id, repo_id)).fetchall()
         return [dict(r) for r in rows]
 
     def repo_stats(self, repo_id: int) -> dict:

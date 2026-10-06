@@ -53,7 +53,9 @@
     try { data = await res.json(); } catch (e) { /* no body */ }
     if (!res.ok) {
       const msg = (data && data.error) || res.statusText || ("HTTP " + res.status);
-      throw new Error(msg);
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
     }
     return data;
   }
@@ -74,7 +76,11 @@
     const res = await fetch(url, init);
     let data = null;
     try { data = await res.json(); } catch (e) { /* no body */ }
-    if (!res.ok) throw new Error((data && data.error) || res.statusText);
+    if (!res.ok) {
+      const err = new Error((data && data.error) || res.statusText);
+      err.status = res.status;
+      throw err;
+    }
     return data;
   }
 
@@ -281,8 +287,29 @@
     jobs[repoId] = entry;
     entry.timer = setInterval(async () => {
       let job;
-      try { job = await rootApi("/jobs/" + jobId); } catch (e) { return; }
-      updateJobUI(repoId, job);
+      try {
+        job = await rootApi("/jobs/" + jobId);
+      } catch (e) {
+        if (e.status !== 404) return;
+        // Job records live in server memory: a server restart erases them,
+        // so reconcile with the persisted repository state instead of
+        // polling a dead job forever (which left the sidebar stuck busy).
+        clearInterval(entry.timer);
+        delete jobs[repoId];
+        await refreshRepos().catch(() => {});
+        const repo = state.repos.find((r) => r.id === repoId);
+        if (repo && repo.status === "ready") {
+          toast(`“${repo.name}” is ready`, "ok");
+        } else if (repo && repo.status === "error") {
+          toast(repo.error || "ingestion failed", "error");
+        }
+        if (state.repoId === repoId) { invalidate(); render(); }
+        return;
+      }
+      // Dom updates must never break the polling below: a thrown error
+      // here used to skip the done/error handling entirely (the sidebar
+      // stayed "ingestion in progress…" until a manual refresh).
+      try { updateJobUI(repoId, job); } catch (e) { /* keep polling */ }
       if (job.status === "done" || job.status === "error") {
         clearInterval(entry.timer);
         delete jobs[repoId];
@@ -300,12 +327,18 @@
     if (!item) return;
     let bar = item.querySelector(".job-bar");
     let note = item.querySelector(".job-note");
+    // renderRepoList() already draws .job-bar for busy repos (but no note),
+    // so create each element independently — requiring both to be missing
+    // before building them left `note` null and threw on every tick.
     if (!bar) {
       bar = document.createElement("div");
       bar.className = "job-bar"; bar.innerHTML = "<i></i>";
+      item.appendChild(bar);
+    }
+    if (!note) {
       note = document.createElement("div");
       note.className = "job-note";
-      item.appendChild(bar); item.appendChild(note);
+      item.appendChild(note);
     }
     bar.firstElementChild.style.width = Math.round((job.progress || 0) * 100) + "%";
     note.textContent = job.note || job.status;
@@ -388,7 +421,9 @@
     renderRepoList();
     syncFilterControls();
     if (state.repo && state.repo.status === "ready") {
-      await authorIndex().then(renderAuthorOptions).catch(() => {});
+      // never block the dashboard render on this request: populating the
+      // author filter for huge repositories can take a moment
+      authorIndex().then(renderAuthorOptions).catch(() => {});
     }
     if (!opts.skipRender) render();
   }
